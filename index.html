@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Live2D Tracker & Parameter Debugger</title>
+    <title>Live2D Tracker & Parameter Debugger (Monochrome)</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -21,8 +21,8 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0b0f19;
-            color: #e2e8f0;
+            background-color: #000000;
+            color: #f3f4f6;
             touch-action: manipulation;
         }
         .mono-val {
@@ -35,31 +35,32 @@
             width: 4px;
         }
         ::-webkit-scrollbar-track {
-            background: #111827;
+            background: #09090b;
         }
         ::-webkit-scrollbar-thumb {
-            background: #374151;
+            background: #27272a;
             border-radius: 2px;
         }
-        video, canvas {
-            transform: translateZ(0);
+        /* カメラ映像およびキャンバスを左右反転（鏡像） */
+        #outputCanvas {
+            transform: scaleX(-1);
             will-change: transform;
         }
     </style>
 </head>
-<body class="h-screen w-screen overflow-hidden flex flex-col justify-between bg-slate-950 text-slate-100 select-none">
+<body class="h-screen w-screen overflow-hidden flex flex-col justify-between bg-black text-zinc-100 select-none">
 
     <!-- Top Header -->
-    <header class="h-14 border-b border-slate-800 bg-slate-900/90 px-4 flex items-center justify-between shrink-0 z-20 backdrop-blur-md">
+    <header class="h-14 border-b border-zinc-800 bg-zinc-950 px-4 flex items-center justify-between shrink-0 z-20">
         <div class="flex items-center space-x-2">
-            <div class="w-3 h-3 rounded-full bg-cyan-400 animate-pulse"></div>
-            <h1 class="header-font text-lg font-bold tracking-wider text-cyan-400">LIVE2D <span class="text-slate-300 text-sm font-normal">TRACKER</span></h1>
+            <div class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></div>
+            <h1 class="header-font text-lg font-bold tracking-wider text-white">LIVE2D <span class="text-zinc-500 text-sm font-normal">TRACKER</span></h1>
         </div>
         <div class="flex items-center space-x-3">
-            <div id="fpsDisplay" class="mono-val text-xs px-2 py-1 bg-slate-800 border border-slate-700 rounded text-cyan-300 font-semibold">
+            <div id="fpsDisplay" class="mono-val text-xs px-2.5 py-1 bg-zinc-900 border border-zinc-700 rounded text-zinc-300 font-semibold">
                 FPS: --
             </div>
-            <button id="toggleCameraBtn" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs px-3 py-1.5 rounded-md font-semibold transition flex items-center space-x-1 shadow-sm">
+            <button id="toggleCameraBtn" class="bg-zinc-100 hover:bg-white text-zinc-950 text-xs px-3.5 py-1.5 rounded-md font-bold transition flex items-center space-x-1.5 shadow-sm">
                 <i class="fa-solid fa-camera"></i>
                 <span id="camBtnText">起動</span>
             </button>
@@ -70,128 +71,131 @@
     <main class="flex-1 relative flex flex-col md:flex-row overflow-hidden">
         
         <!-- Camera Viewport Canvas Container -->
-        <div class="relative flex-1 bg-black flex items-center justify-center overflow-hidden min-h-[280px]">
+        <div class="relative flex-1 bg-black flex items-center justify-center overflow-hidden min-h-[260px]">
             <video id="webcam" class="hidden" playsinline muted></video>
             <canvas id="outputCanvas" class="w-full h-full object-contain"></canvas>
 
             <!-- Status / Loading Banner -->
-            <div id="statusOverlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10 transition-opacity duration-300">
-                <i id="statusIcon" class="fa-solid fa-circle-notch fa-spin text-4xl text-cyan-400 mb-3"></i>
-                <p id="statusText" class="text-slate-300 text-sm font-medium">カメラのアクセスを待機中...</p>
-                <button id="startTrackBtn" class="mt-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm py-2 px-6 rounded-lg transition shadow-lg shadow-cyan-500/20">
+            <div id="statusOverlay" class="absolute inset-0 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10 transition-opacity duration-300">
+                <i id="statusIcon" class="fa-solid fa-circle-notch fa-spin text-4xl text-zinc-400 mb-3"></i>
+                <p id="statusText" class="text-zinc-300 text-sm font-medium">カメラのアクセスを待機中...</p>
+                <button id="startTrackBtn" class="mt-4 bg-white hover:bg-zinc-200 text-black font-bold text-sm py-2 px-6 rounded-md transition border border-zinc-300">
                     トラッキングを開始
                 </button>
             </div>
 
             <!-- Floating Quick Toggle Overlay -->
             <div class="absolute top-3 left-3 flex flex-wrap gap-2 z-10">
-                <button id="toggleWireframeBtn" class="bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-xs px-2.5 py-1.5 rounded text-cyan-300 backdrop-blur-md transition flex items-center space-x-1.5">
-                    <i class="fa-solid fa-vector-square text-cyan-400"></i>
+                <button id="toggleWireframeBtn" class="bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 text-xs px-2.5 py-1.5 rounded text-zinc-200 backdrop-blur-md transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-vector-square text-zinc-400"></i>
                     <span id="wireframeText">メッシュ: ON</span>
                 </button>
-                <button id="toggleFpsCapBtn" class="bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-xs px-2.5 py-1.5 rounded text-slate-300 backdrop-blur-md transition flex items-center space-x-1.5">
-                    <i class="fa-solid fa-gauge-high text-amber-400"></i>
+                <button id="toggleFpsCapBtn" class="bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 text-xs px-2.5 py-1.5 rounded text-zinc-300 backdrop-blur-md transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-gauge-high text-zinc-400"></i>
                     <span id="fpsCapText">30 FPS</span>
                 </button>
             </div>
         </div>
 
         <!-- Live Parameters Display Panel -->
-        <div class="w-full md:w-80 border-t md:border-t-0 md:border-l border-slate-800 bg-slate-900/90 overflow-y-auto p-3 flex flex-col gap-3 shrink-0 h-[45%] md:h-full">
+        <div class="w-full md:w-80 border-t md:border-t-0 md:border-l border-zinc-800 bg-zinc-950 overflow-y-auto p-3 flex flex-col gap-3 shrink-0 h-[48%] md:h-full">
             
-            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between pb-1 border-b border-slate-800">
-                <span>リアルタイム検出パラメータ</span>
-                <span class="text-[10px] text-cyan-400 font-normal">補正・正規化適用済</span>
+            <div class="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center justify-between pb-1 border-b border-zinc-800">
+                <span>検出パラメータ (モノクロ)</span>
+                <span class="text-[10px] text-zinc-400 font-normal">正規化・角度変換済</span>
             </div>
 
             <!-- Head Pose Angles (X, Y, Z) Card -->
-            <div class="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80">
-                <div class="text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between">
-                    <span><i class="fa-solid fa-head-side-virus text-cyan-400 mr-1.5"></i>頭部の向き (角度 °)</span>
+            <div class="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800">
+                <div class="text-xs font-semibold text-zinc-300 mb-2 flex items-center justify-between">
+                    <span><i class="fa-solid fa-head-side-virus text-zinc-400 mr-1.5"></i>頭部の向き (0° 〜 180°)</span>
                 </div>
                 <div class="grid grid-cols-3 gap-2 text-center">
-                    <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                        <div class="text-[10px] text-slate-400 font-semibold mb-0.5">X軸 (Pitch)</div>
-                        <div id="valPoseX" class="mono-val text-sm font-bold text-cyan-400">0.00</div>
-                        <div class="text-[9px] text-slate-500 mt-0.5">上下</div>
+                    <!-- Pitch (Upper: 0, Down: 180) -->
+                    <div class="bg-black/60 p-2 rounded border border-zinc-800">
+                        <div class="text-[10px] text-zinc-400 font-semibold mb-0.5">X軸 (上下)</div>
+                        <div id="valPoseX" class="mono-val text-sm font-bold text-white">90.00°</div>
+                        <div class="text-[9px] text-zinc-500 mt-0.5">上0° / 下180°</div>
                     </div>
-                    <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                        <div class="text-[10px] text-slate-400 font-semibold mb-0.5">Y軸 (Yaw)</div>
-                        <div id="valPoseY" class="mono-val text-sm font-bold text-cyan-400">0.00</div>
-                        <div class="text-[9px] text-slate-500 mt-0.5">左右回転</div>
+                    <!-- Yaw (Left: 0, Right: 180) -->
+                    <div class="bg-black/60 p-2 rounded border border-zinc-800">
+                        <div class="text-[10px] text-zinc-400 font-semibold mb-0.5">Y軸 (左右)</div>
+                        <div id="valPoseY" class="mono-val text-sm font-bold text-white">90.00°</div>
+                        <div class="text-[9px] text-zinc-500 mt-0.5">左0° / 右180°</div>
                     </div>
-                    <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                        <div class="text-[10px] text-slate-400 font-semibold mb-0.5">Z軸 (Roll)</div>
-                        <div id="valPoseZ" class="mono-val text-sm font-bold text-cyan-400">0.00</div>
-                        <div class="text-[9px] text-slate-500 mt-0.5">かしげ</div>
+                    <!-- Roll (Left: 0, Right: 180) -->
+                    <div class="bg-black/60 p-2 rounded border border-zinc-800">
+                        <div class="text-[10px] text-zinc-400 font-semibold mb-0.5">Z軸 (傾き)</div>
+                        <div id="valPoseZ" class="mono-val text-sm font-bold text-white">90.00°</div>
+                        <div class="text-[9px] text-zinc-500 mt-0.5">左0° / 右180°</div>
                     </div>
                 </div>
             </div>
 
             <!-- Eye Openness Card (Independent Left & Right) -->
-            <div class="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80">
-                <div class="text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between">
-                    <span><i class="fa-solid fa-eye text-emerald-400 mr-1.5"></i>目の開閉度 (独立計測)</span>
-                    <span class="text-[9px] text-slate-500">(縦幅*2 / 横幅)</span>
+            <div class="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800">
+                <div class="text-xs font-semibold text-zinc-300 mb-2 flex items-center justify-between">
+                    <span><i class="fa-solid fa-eye text-zinc-400 mr-1.5"></i>目の開閉度 (独立計測)</span>
+                    <span class="text-[9px] text-zinc-500">(縦幅*2 / 横幅)</span>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <!-- Left Eye -->
-                    <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 flex flex-col justify-between">
+                    <div class="bg-black/60 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="text-[11px] text-slate-400 font-medium">左目 (Left)</span>
-                            <span id="valEyeL" class="mono-val text-sm font-bold text-emerald-400">0.00</span>
+                            <span class="text-[11px] text-zinc-400 font-medium">左目 (Left)</span>
+                            <span id="valEyeL" class="mono-val text-sm font-bold text-white">0.00</span>
                         </div>
-                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div id="barEyeL" class="bg-emerald-400 h-full w-0 transition-all duration-75"></div>
+                        <div class="w-full bg-zinc-800 h-1 rounded overflow-hidden">
+                            <div id="barEyeL" class="bg-zinc-200 h-full w-0 transition-all duration-75"></div>
                         </div>
                     </div>
                     <!-- Right Eye -->
-                    <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 flex flex-col justify-between">
+                    <div class="bg-black/60 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="text-[11px] text-slate-400 font-medium">右目 (Right)</span>
-                            <span id="valEyeR" class="mono-val text-sm font-bold text-emerald-400">0.00</span>
+                            <span class="text-[11px] text-zinc-400 font-medium">右目 (Right)</span>
+                            <span id="valEyeR" class="mono-val text-sm font-bold text-white">0.00</span>
                         </div>
-                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div id="barEyeR" class="bg-emerald-400 h-full w-0 transition-all duration-75"></div>
+                        <div class="w-full bg-zinc-800 h-1 rounded overflow-hidden">
+                            <div id="barEyeR" class="bg-zinc-200 h-full w-0 transition-all duration-75"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Mouth Opening & Width Card -->
-            <div class="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80">
-                <div class="text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between">
-                    <span><i class="fa-solid fa-lips text-pink-400 mr-1.5"></i>口の形状パラメータ</span>
-                    <span class="text-[9px] text-slate-500">距離補正済</span>
+            <div class="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800">
+                <div class="text-xs font-semibold text-zinc-300 mb-2 flex items-center justify-between">
+                    <span><i class="fa-solid fa-lips text-zinc-400 mr-1.5"></i>口の形状パラメータ</span>
+                    <span class="text-[9px] text-zinc-500">距離補正済</span>
                 </div>
                 <div class="space-y-2">
                     <!-- Mouth Height -->
-                    <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                    <div class="bg-black/60 p-2.5 rounded border border-zinc-800">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="text-[11px] text-slate-400 font-medium">口の開き（縦幅）</span>
-                            <span id="valMouthOpen" class="mono-val text-sm font-bold text-pink-400">0.00</span>
+                            <span class="text-[11px] text-zinc-400 font-medium">口の開き（縦幅）</span>
+                            <span id="valMouthOpen" class="mono-val text-sm font-bold text-white">0.00</span>
                         </div>
-                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div id="barMouthOpen" class="bg-pink-400 h-full w-0 transition-all duration-75"></div>
+                        <div class="w-full bg-zinc-800 h-1 rounded overflow-hidden">
+                            <div id="barMouthOpen" class="bg-zinc-200 h-full w-0 transition-all duration-75"></div>
                         </div>
                     </div>
                     <!-- Mouth Width -->
-                    <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                    <div class="bg-black/60 p-2.5 rounded border border-zinc-800">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="text-[11px] text-slate-400 font-medium">口の広がり（横幅）</span>
-                            <span id="valMouthWidth" class="mono-val text-sm font-bold text-purple-400">0.00</span>
+                            <span class="text-[11px] text-zinc-400 font-medium">口の広がり（横幅）</span>
+                            <span id="valMouthWidth" class="mono-val text-sm font-bold text-white">0.00</span>
                         </div>
-                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div id="barMouthWidth" class="bg-purple-400 h-full w-0 transition-all duration-75"></div>
+                        <div class="w-full bg-zinc-800 h-1 rounded overflow-hidden">
+                            <div id="barMouthWidth" class="bg-zinc-200 h-full w-0 transition-all duration-75"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Distance Scale Info -->
-            <div class="bg-slate-950/40 rounded-lg p-2 border border-slate-800/50 flex justify-between items-center text-[11px] text-slate-400">
-                <span>顔スケール係数 (距離依存):</span>
-                <span id="valFaceScale" class="mono-val font-semibold text-slate-200">1.00</span>
+            <div class="bg-zinc-900/30 rounded p-2 border border-zinc-800/80 flex justify-between items-center text-[11px] text-zinc-400">
+                <span>顔スケール (距離依存基準):</span>
+                <span id="valFaceScale" class="mono-val font-semibold text-zinc-200">1.00</span>
             </div>
 
         </div>
@@ -255,6 +259,10 @@
             return Math.max(min, Math.min(max, val));
         }
 
+        /*
+          頭部回転角度の算出 (0° 〜 180° 表示にマッピング)
+          正面 = 90°
+        */
         function calculateHeadPose(landmarks) {
             const nose = landmarks[LM.HEAD_POSE.nose];
             const chin = landmarks[LM.HEAD_POSE.chin];
@@ -262,22 +270,31 @@
             const leftCheek = landmarks[LM.HEAD_POSE.leftCheek];
             const rightCheek = landmarks[LM.HEAD_POSE.rightCheek];
 
+            // 1. X軸 (Pitch: 上下) -> 上に行くと0°、下に行くと180°
             const midY = (forehead.y + chin.y) / 2;
             const faceHeight = Math.abs(chin.y - forehead.y) || 1;
-            const pitch = ((nose.y - midY) / faceHeight) * -120;
+            const rawPitch = ((nose.y - midY) / faceHeight) * 180; // 正面付近が0前後
+            const pitchDeg = clamp(90 + rawPitch, 0, 180);
 
+            // 鏡像反転を考慮した左右算出
             const distLeft = Math.abs(nose.x - leftCheek.x);
             const distRight = Math.abs(rightCheek.x - nose.x);
-            const yaw = ((distRight - distLeft) / (distLeft + distRight || 1)) * 90;
+            
+            // 2. Y軸 (Yaw: 左右) -> 実際の現実の顔が左に行くと0°、右に行くと180°
+            const rawYaw = ((distRight - distLeft) / (distLeft + distRight || 1)) * 180;
+            const yawDeg = clamp(90 - rawYaw, 0, 180);
 
+            // 3. Z軸 (Roll: 傾き) -> 左に傾けると0°、右に傾けると180°
             const dy = rightCheek.y - leftCheek.y;
             const dx = rightCheek.x - leftCheek.x;
-            const roll = Math.atan2(dy, dx) * (180 / Math.PI);
+            const rollRad = Math.atan2(dy, dx);
+            const rawRoll = rollRad * (180 / Math.PI);
+            const rollDeg = clamp(90 - rawRoll, 0, 180);
 
             return {
-                x: clamp(pitch, -45, 45),
-                y: clamp(yaw, -45, 45),
-                z: clamp(roll, -45, 45)
+                x: pitchDeg,
+                y: yawDeg,
+                z: rollDeg
             };
         }
 
@@ -307,11 +324,13 @@
                 const faceScale = Math.max(0.05, eyeDist);
                 valFaceScale.textContent = faceScale.toFixed(2);
 
+                // 0°〜180° 角度の更新
                 const pose = calculateHeadPose(landmarks);
-                valPoseX.textContent = pose.x.toFixed(2);
-                valPoseY.textContent = pose.y.toFixed(2);
-                valPoseZ.textContent = pose.z.toFixed(2);
+                valPoseX.textContent = `${pose.x.toFixed(2)}°`;
+                valPoseY.textContent = `${pose.y.toFixed(2)}°`;
+                valPoseZ.textContent = `${pose.z.toFixed(2)}°`;
 
+                // 目の開き具合 (縦幅 * 2 / 横幅)
                 const leftEyeH = distance(landmarks[LM.LEFT_EYE.top], landmarks[LM.LEFT_EYE.bottom]);
                 const leftEyeW = distance(landmarks[LM.LEFT_EYE.left], landmarks[LM.LEFT_EYE.right]) || 0.001;
                 const leftEyeOpenRatio = (leftEyeH * 2.0) / leftEyeW;
@@ -327,6 +346,7 @@
                 barEyeL.style.width = `${Math.min(100, (eyeLVal / 1.0) * 100)}%`;
                 barEyeR.style.width = `${Math.min(100, (eyeRVal / 1.0) * 100)}%`;
 
+                // 口のサイズ（距離正規化）
                 const mouthH = distance(landmarks[LM.MOUTH.top], landmarks[LM.MOUTH.bottom]);
                 const mouthW = distance(landmarks[LM.MOUTH.left], landmarks[LM.MOUTH.right]);
 
@@ -338,8 +358,9 @@
                 barMouthOpen.style.width = `${Math.min(100, (mouthOpenNorm / 1.0) * 100)}%`;
                 barMouthWidth.style.width = `${Math.min(100, (mouthWidthNorm / 0.8) * 100)}%`;
 
+                // メッシュ描画（モノクロ・ホワイト）
                 if (showWireframe) {
-                    canvasCtx.fillStyle = '#06b6d4';
+                    canvasCtx.fillStyle = '#ffffff';
                     const keyPoints = [
                         ...Object.values(LM.LEFT_EYE),
                         ...Object.values(LM.RIGHT_EYE),
@@ -382,7 +403,7 @@
             } catch (err) {
                 console.error(err);
                 statusText.textContent = "初期化エラー: " + err.message;
-                statusIcon.className = "fa-solid fa-triangle-exclamation text-4xl text-red-500 mb-3";
+                statusIcon.className = "fa-solid fa-triangle-exclamation text-4xl text-zinc-500 mb-3";
             }
         }
 
@@ -420,15 +441,15 @@
                 isRunning = true;
                 statusOverlay.classList.add('opacity-0', 'pointer-events-none');
                 camBtnText.textContent = "停止";
-                toggleCameraBtn.classList.replace('bg-cyan-600', 'bg-rose-600');
-                toggleCameraBtn.classList.replace('hover:bg-cyan-500', 'hover:bg-rose-500');
+                toggleCameraBtn.classList.replace('bg-zinc-100', 'bg-zinc-800');
+                toggleCameraBtn.classList.replace('text-zinc-950', 'text-zinc-100');
 
                 requestAnimationFrame(processVideoFrame);
 
             } catch (err) {
                 console.error(err);
                 statusText.textContent = "カメラ接続失敗: アクセスを許可してください";
-                statusIcon.className = "fa-solid fa-video-slash text-4xl text-amber-500 mb-3";
+                statusIcon.className = "fa-solid fa-video-slash text-4xl text-zinc-500 mb-3";
             }
         }
 
@@ -440,10 +461,10 @@
             }
             statusOverlay.classList.remove('opacity-0', 'pointer-events-none');
             statusText.textContent = "トラッキングは停止しています";
-            statusIcon.className = "fa-solid fa-pause text-4xl text-cyan-400 mb-3";
+            statusIcon.className = "fa-solid fa-pause text-4xl text-zinc-400 mb-3";
             camBtnText.textContent = "起動";
-            toggleCameraBtn.classList.replace('bg-rose-600', 'bg-cyan-600');
-            toggleCameraBtn.classList.replace('hover:bg-rose-500', 'hover:bg-cyan-500');
+            toggleCameraBtn.classList.replace('bg-zinc-800', 'bg-zinc-100');
+            toggleCameraBtn.classList.replace('text-zinc-100', 'text-zinc-950');
         }
 
         startTrackBtn.addEventListener('click', () => {
@@ -469,8 +490,8 @@
         toggleWireframeBtn.addEventListener('click', () => {
             showWireframe = !showWireframe;
             wireframeText.textContent = `メッシュ: ${showWireframe ? 'ON' : 'OFF'}`;
-            toggleWireframeBtn.classList.toggle('text-cyan-300', showWireframe);
-            toggleWireframeBtn.classList.toggle('text-slate-400', !showWireframe);
+            toggleWireframeBtn.classList.toggle('text-zinc-200', showWireframe);
+            toggleWireframeBtn.classList.toggle('text-zinc-500', !showWireframe);
         });
 
         toggleFpsCapBtn.addEventListener('click', () => {
