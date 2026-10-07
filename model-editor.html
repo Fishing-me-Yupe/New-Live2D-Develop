@@ -1,0 +1,150 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>モデルエディタ</title>
+<style>
+:root{--bg:#14161c;--p:#1d2029;--b:#2d3140;--t:#e6e8ef;--a:#6aa8ff;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]){--bg:#eef0f5;--p:#fff;--b:#cfd3df;--t:#1c1f29;color-scheme:light}}
+html,body{height:100%;margin:0}body{background:var(--bg);color:var(--t);font:13px system-ui,sans-serif;display:flex;flex-direction:column}
+#top{display:flex;flex-wrap:wrap;gap:6px;padding:6px;background:var(--p);border-bottom:1px solid var(--b);align-items:center}
+button,select,input[type=number]{background:var(--bg);color:var(--t);border:1px solid var(--b);border-radius:5px;padding:4px 8px;font:inherit}
+button{cursor:pointer}button.on{border-color:var(--a);color:var(--a)}
+#main{flex:1;display:flex;min-height:0}
+.side{width:230px;background:var(--p);padding:8px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+#wrap{flex:1;position:relative;min-width:0}
+#cv{width:100%;height:100%;display:block;touch-action:none;background:repeating-conic-gradient(#0002 0 25%,transparent 0 50%) 0 0/20px 20px,var(--bg)}
+h4{margin:6px 0 2px;font-size:12px;opacity:.7}
+.row{display:flex;gap:4px;align-items:center}.row input[type=range]{flex:1;min-width:0}
+.ly{padding:4px;border:1px solid var(--b);border-radius:5px;cursor:pointer}.ly.on{border-color:var(--a)}
+.ph input{width:44px}
+small{opacity:.6}
+@media(max-width:800px){#main{flex-direction:column}.side{width:auto;max-height:28%}}
+</style></head><body>
+<div id="top">
+<button id="bImg">画像追加</button><button id="bMove">レイヤー移動</button><button id="bMesh" class="on">メッシュ編集</button><button id="bAdd">頂点追加</button><button id="bDelV">頂点削除</button><button id="bUndo">元に戻す</button><button id="bRedo">やり直し</button>
+<label>分割 <input id="cc" type="number" value="8" min="1" max="30" style="width:48px"> × <input id="rr" type="number" value="8" min="1" max="30" style="width:48px"></label><button id="bGen">メッシュ再生成</button>
+<label><input type="checkbox" id="kEdit"> パラメータ編集(選択パラメータにキー記録)</label>
+<label><input type="checkbox" id="kTrack"> マウス追従</label><label><input type="checkbox" id="kBreath"> 呼吸</label><label><input type="checkbox" id="kBlink"> まばたき</label><label><input type="checkbox" id="kPhys" checked> 物理演算</label>
+<span style="flex:1"></span><button id="bSave">モデル保存</button><button id="bLoad">モデル読込</button><button id="bPng">PNG出力</button><button id="bFit">表示リセット</button>
+<input type="file" id="fImg" accept="image/*" multiple hidden><input type="file" id="fMod" accept=".json" hidden>
+</div>
+<div id="main">
+<div class="side"><h4>レイヤー(下ほど前面)</h4><div id="lys"></div><div class="row"><button id="lUp">↑</button><button id="lDn">↓</button><button id="lDel">削除</button></div>
+<div class="row"><label>拡大 <input id="lS" type="range" min="0.05" max="3" step="0.01"></label></div>
+<div class="row">回転<input id="lR" type="range" min="-180" max="180"></div><div class="row">不透明<input id="lO" type="range" min="0" max="1" step=".01"></div>
+<div class="row"><select id="lB"><option>source-over<option>multiply<option>screen<option>lighter</select></div>
+<div class="row">親<select id="lP"></select></div><div class="row">マスク<select id="lC"></select><label><input type="checkbox" id="lI">反転</label></div>
+<div class="row"><button id="lKey">表示キー</button><button id="lBind">パラメータ連動</button></div><small>右ドラッグ/中ボタン:パン、ホイール:ズーム。メッシュ編集で頂点をドラッグして変形。</small></div>
+<div id="wrap"><canvas id="cv"></canvas></div>
+<div class="side"><h4>パラメータ <button id="pAdd">＋</button></h4><div id="prs"></div>
+<h4>物理(慣性) <button id="yAdd">＋</button></h4><div id="phs"></div>
+<h4>表情・ホットキー <button id="eAdd">＋</button></h4><div id="exs" class="row" style="flex-wrap:wrap"></div><small>右クリックで削除</small><h4>アニメーション</h4><div class="row"><button id="bRec">●録画</button><button id="bPlay">▶再生</button></div><small>変形キー: 「パラメータ編集」ON→スライダーを動かす→頂点を動かすとその値にキーが記録され、値の間は線形補間されます。</small></div>
+</div>
+<script>
+const $=s=>document.querySelector(s),cv=$('#cv'),MC=cv.getContext('2d');let cx=MC,selV=-1,rec=null,play=null,U=[],Rd=[];
+let M={exps:o.exps||[],anim:o.anim||null,layers:[],params:[],physics:[]},sel=null,ap=null,view={x:0,y:0,z:1},mode='mesh',drag=null,mouse={x:0,y:0},T=0,idc=1;
+const P=id=>M.params.find(p=>p.id===id),cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+function defaults(){M.params=[['AngleX','角度X',-30,30,0],['AngleY','角度Y',-30,30,0],['EyeOpen','目の開き',0,1,1],['MouthOpen','口の開き',0,1,0],['Breath','呼吸',0,1,0],['HairSway','髪揺れ',-30,30,0]].map(a=>({id:a[0],name:a[1],min:a[2],max:a[3],def:a[4],val:a[4]}));
+M.physics=[{inp:'AngleX',out:'HairSway',k:40,d:4,g:0.3}].map(initPh);ap=M.params[0].id;M.exps=[];M.anim=null}
+function initPh(r){r.x=0;r.v=0;r.lv=0;r.last=null;return r}
+function genMesh(l,c,r){const cn=document.createElement('canvas');cn.width=l.w;cn.height=l.h;const g=cn.getContext('2d',{willReadFrequently:true});g.drawImage(l.im,0,0);const D=g.getImageData(0,0,l.w,l.h).data;
+let tr=false;for(let i=3;i<D.length;i+=64)if(D[i]<250){tr=true;break}if(tr){c=Math.max(c,20);r=Math.max(r,20)}
+l.c=c;l.r=r;l.u=[];for(let j=0;j<=r;j++)for(let i=0;i<=c;i++)l.u.push(i*l.w/c,j*l.h/r);l.v=l.u.slice();l.kf={};
+const on=(i,j)=>{if(!tr)return true;const x0=Math.floor(i*l.w/c),x1=Math.min(l.w,Math.ceil((i+1)*l.w/c)),y0=Math.floor(j*l.h/r),y1=Math.min(l.h,Math.ceil((j+1)*l.h/r));for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2)if(D[(y*l.w+x)*4+3]>16)return true;return false};
+l.t=[];for(let j=0;j<r;j++)for(let i=0;i<c;i++)if(on(i,j)){const a=j*(c+1)+i,b=a+1,e=a+c+1,d=e+1;l.t.push(a,b,e,b,d,e)}}
+const tris=l=>l.t,usedV=l=>[...new Set(l.t)];
+function addLayer(name,src,done){const im=new Image();im.onload=()=>{const l={id:idc++,name,src,im,w:im.width,h:im.height,x:0,y:0,s:1,vis:true};l.s=Math.min(1,420/Math.max(l.w,l.h));genMesh(l,+$('#cc').value,+$('#rr').value);M.layers.push(l);sel=l;done&&done(l);ui()};im.src=src}
+function poff(l,p){const k=l.kf[p.id];if(!k||!k.length)return null;const pts=[...k.map(a=>({v:a.v,o:a.off})),{v:p.def,o:null}].sort((a,b)=>a.v-b.v),v=p.val;
+if(v<=pts[0].v)return pts[0].o;const e=pts[pts.length-1];if(v>=e.v)return e.o;for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];if(v>=a.v&&v<=b.v){const t=(v-a.v)/(b.v-a.v);return l.v.map((_,n)=>(a.o?a.o[n]:0)*(1-t)+(b.o?b.o[n]:0)*t)}}return null}
+function cur(l){const o=l.v.slice();for(const p of M.params){const f=poff(l,p);if(f)for(let i=0;i<o.length;i++)o[i]+=f[i]}return o}
+function byId(id){return M.layers.find(l=>l.id===id)}
+function ev(l){const o={x:l.x,y:l.y,r:l.rot||0,s:l.s,a:l.op==null?1:l.op};for(const b of l.bind||[]){const p=P(b.p);if(!p)continue;o[b.k]+=b.a+(b.b-b.a)*(p.val-p.min)/(p.max-p.min||1)}return o}
+function w2(l,x,y){let px=x-l.w/2,py=y-l.h/2,q=l;for(let n=0;q&&n<8;n++){const o=ev(q),a=o.r*Math.PI/180,c=Math.cos(a),s=Math.sin(a),nx=o.x+o.s*(c*px-s*py),ny=o.y+o.s*(s*px+c*py);px=nx;py=ny;q=q.par?byId(q.par):null}return[px,py]}
+function tri(im,x0,y0,x1,y1,x2,y2,u0,v0,u1,v1,u2,v2){const mx=(x0+x1+x2)/3,my=(y0+y1+y2)/3,g=p=>{const dx=p[0]-mx,dy=p[1]-my,L=Math.hypot(dx,dy)||1;return[p[0]+dx/L*.7,p[1]+dy/L*.7]};
+const A=g([x0,y0]),B=g([x1,y1]),C=g([x2,y2]);cx.save();cx.beginPath();cx.moveTo(...A);cx.lineTo(...B);cx.lineTo(...C);cx.closePath();cx.clip();
+const D=u0*v1+v0*u2+u1*v2-v1*u2-v0*u1-u0*v2;if(Math.abs(D)<1e-9){cx.restore();return}
+cx.transform((x0*v1+v0*x2+x1*v2-v1*x2-v0*x1-x0*v2)/D,(y0*v1+v0*y2+y1*v2-v1*y2-v0*y1-y0*v2)/D,(u0*x1+x0*u2+u1*x2-x1*u2-x0*u1-u0*x2)/D,(u0*y1+y0*u2+u1*y2-y1*u2-y0*u1-u0*y2)/D,
+(u0*v1*x2+v0*x1*u2+x0*u1*v2-x0*v1*u2-v0*u1*x2-u0*x1*v2)/D,(u0*v1*y2+v0*y1*u2+y0*u1*v2-y0*v1*u2-v0*u1*y2-u0*y1*v2)/D);cx.drawImage(im,0,0);cx.restore()}
+function size(){const d=devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;if(cv.width!==w*d||cv.height!==h*d){cv.width=w*d;cv.height=h*d}return d}
+function drawL(l,S){const V=cur(l),t=l.t;for(let i=0;i<t.length;i+=3){const a=t[i],b=t[i+1],c=t[i+2],q=n=>w2(l,V[n*2],V[n*2+1]),A=q(a),B=q(b),C=q(c);cx.setTransform(S.k,0,0,S.k,S.x,S.y);tri(l.im,...A,...B,...C,l.u[a*2],l.u[a*2+1],l.u[b*2],l.u[b*2+1],l.u[c*2],l.u[c*2+1])}}
+const oc=document.createElement('canvas'),ocx=oc.getContext('2d'),mk=document.createElement('canvas'),mkx=mk.getContext('2d');
+function draw(ov=true){const d=size(),W=cv.clientWidth,H=cv.clientHeight;cx.setTransform(1,0,0,1,0,0);cx.clearRect(0,0,cv.width,cv.height);
+const S=ov?{k:view.z*d,x:(W/2+view.x)*d,y:(H/2+view.y)*d}:{k:d,x:W/2*d,y:H/2*d};
+for(const l of M.layers){if(!l.vis)continue;const o=ev(l),m=l.clip&&byId(l.clip);
+if(m){oc.width=mk.width=cv.width;oc.height=mk.height=cv.height;cx=ocx;drawL(l,S);cx=mkx;drawL(m,S);cx=ocx;cx.setTransform(1,0,0,1,0,0);cx.globalCompositeOperation=l.inv?'destination-out':'destination-in';cx.drawImage(mk,0,0);cx=MC;cx.setTransform(1,0,0,1,0,0);cx.globalAlpha=o.a;cx.globalCompositeOperation=l.bl||'source-over';cx.drawImage(oc,0,0)}
+else{cx.globalAlpha=o.a;cx.globalCompositeOperation=l.bl||'source-over';drawL(l,S)}cx.globalAlpha=1;cx.globalCompositeOperation='source-over'}
+if(ov&&sel&&sel.vis){cx.setTransform(S.k,0,0,S.k,S.x,S.y);const V=cur(sel),t=tris(sel);cx.lineWidth=1/view.z;cx.strokeStyle='#6aa8ff88';cx.beginPath();
+for(let i=0;i<t.length;i+=3){const p=[0,1,2].map(k=>w2(sel,V[t[i+k]*2],V[t[i+k]*2+1]));cx.moveTo(...p[0]);cx.lineTo(...p[1]);cx.lineTo(...p[2]);cx.closePath()}cx.stroke();
+if(mode==='mesh'){cx.fillStyle='#ffd24a';for(const n of usedV(sel)){const i=n*2,p=w2(sel,V[i],V[i+1]);cx.fillStyle=n===selV?'#ff5a5a':'#ffd24a';cx.beginPath();cx.arc(p[0],p[1],(n===selV?6:4)/view.z,0,7);cx.fill()}}}}
+const toW=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left-r.width/2-view.x)/view.z,(e.clientY-r.top-r.height/2-view.y)/view.z]};
+function ensureKF(l,p){const a=l.kf[p.id]||(l.kf[p.id]=[]);let k=a.find(k=>Math.abs(k.v-p.val)<1e-9);if(!k){k={v:p.val,off:(poff(l,p)||l.v.map(()=>0)).slice()};a.push(k)}return k}
+cv.oncontextmenu=e=>e.preventDefault();
+cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);const[x,y]=toW(e);drag={sx:e.clientX,sy:e.clientY,lx:x,ly:y};
+if(e.button!==0){drag.t='pan';return}
+if(sel&&mode==='add'){addV(x,y);drag=null;return}if(sel&&mode==='mesh'){const V=cur(sel);let best=-1,bd=12/view.z;for(const n of usedV(sel)){const p=w2(sel,V[n*2],V[n*2+1]),dd=Math.hypot(p[0]-x,p[1]-y);if(dd<bd){bd=dd;best=n}}if(best>=0){push();selV=best;drag.t='v';drag.i=best*2;return}}
+for(let i=M.layers.length-1;i>=0;i--){const l=M.layers[i];if(!l.vis)continue;const ps=[w2(l,0,0),w2(l,l.w,0),w2(l,0,l.h),w2(l,l.w,l.h)],a=Math.min(...ps.map(p=>p[0])),c=Math.max(...ps.map(p=>p[0])),b=Math.min(...ps.map(p=>p[1])),d=Math.max(...ps.map(p=>p[1]));if(x>=a&&x<=c&&y>=b&&y<=d){if(sel!==l){sel=l;ui()}if(mode==='move')push();drag.t=mode==='move'?'m':'n';return}}drag.t='pan'};
+cv.onpointermove=e=>{const r=cv.getBoundingClientRect();mouse.x=cl((e.clientX-r.left)/r.width*2-1,-1,1);mouse.y=cl((e.clientY-r.top)/r.height*2-1,-1,1);if(!drag)return;
+const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;drag.sx=e.clientX;drag.sy=e.clientY;
+if(drag.t==='pan'){view.x+=dx;view.y+=dy}else if(drag.t==='m'){sel.x+=dx/view.z;sel.y+=dy/view.z}
+else if(drag.t==='v'){const p=ap&&P(ap),i=drag.i,ex=$('#kEdit').checked&&p&&p.val!==p.def,ddx=dx/view.z/sel.s,ddy=dy/view.z/sel.s;
+if(ex){const k=ensureKF(sel,p);k.off[i]+=ddx;k.off[i+1]+=ddy}else{sel.v[i]+=ddx;sel.v[i+1]+=ddy}}};
+cv.onpointerup=()=>drag=null;
+cv.onwheel=e=>{e.preventDefault();const z=cl(view.z*(e.deltaY<0?1.1:.9),.1,10);view.z=z};
+function animStep(dt){if(rec)rec.fr.push([T-rec.t0,...M.params.map(p=>p.val)]);else if(play&&M.anim){const A=M.anim,d=A.fr[A.fr.length-1][0]||1,t=(T-play)%d;let k=A.fr.findIndex(f=>f[0]>=t);if(k<0)k=A.fr.length-1;A.ids.forEach((id,i)=>{const p=P(id);if(p)p.val=A.fr[k][i+1]})}}
+function step(dt){animStep(dt);if($('#kTrack').checked&&!drag){const ax=P('AngleX'),ay=P('AngleY');if(ax)ax.val+=(mouse.x*ax.max-ax.val)*Math.min(1,dt*8);if(ay)ay.val+=(mouse.y*ay.max-ay.val)*Math.min(1,dt*8)}
+if($('#kBreath').checked){const p=P('Breath');if(p)p.val=(Math.sin(T*1.6)+1)/2}
+if($('#kBlink').checked){const p=P('EyeOpen');if(p){const c=T%4;p.val=c<.18?Math.abs(c-.09)/.09*p.max:p.max}}
+if($('#kPhys').checked)for(const r of M.physics){const a=P(r.inp),o=P(r.out);if(!a||!o)continue;if(r.last===null)r.last=a.val;const vin=(a.val-r.last)/dt,ac=cl((vin-r.lv)/dt,-3000,3000);r.lv=vin;r.last=a.val;
+r.v+=(-r.k*r.x-r.d*r.v-r.g*ac)*dt;r.x=cl(r.x+r.v*dt,o.min-o.def,o.max-o.def);o.val=o.def+r.x}}
+let lt=performance.now();(function loop(n){const dt=cl((n-lt)/1000,1/240,1/30);lt=n;T+=dt;step(dt);draw();for(const p of M.params)if(p.el&&document.activeElement!==p.el){p.el.value=p.val;p.nm.textContent=p.val.toFixed(2)}requestAnimationFrame(loop)})(lt);
+function ui(){const L=$('#lys');L.innerHTML='';M.layers.forEach(l=>{const d=document.createElement('div');d.className='ly'+(l===sel?' on':'');d.innerHTML=`<label><input type="checkbox" ${l.vis?'checked':''}> </label>${l.name}`;
+d.querySelector('input').onclick=e=>{e.stopPropagation();l.vis=e.target.checked};d.onclick=()=>{sel=l;ui()};L.append(d)});$('#lS').value=sel?sel.s:1;fillSel();
+const R=$('#prs');R.innerHTML='';M.params.forEach(p=>{const d=document.createElement('div');const n=sel&&sel.kf[p.id]?sel.kf[p.id].length:0;
+d.innerHTML=`<div class="row"><input type="radio" name="ap" ${p.id===ap?'checked':''}><b style="flex:1">${p.name}</b><small>KF${n}</small><span></span><button>×</button></div><div class="row"><input type="range" min="${p.min}" max="${p.max}" step="0.01"></div>`;
+const rg=d.querySelector('input[type=range]');p.el=rg;p.nm=d.querySelector('span');rg.value=p.val;rg.oninput=()=>p.val=+rg.value;d.querySelector('[type=radio]').onchange=()=>ap=p.id;
+d.querySelector('button').onclick=()=>{M.params=M.params.filter(q=>q!==p);M.layers.forEach(l=>delete l.kf[p.id]);ui()};R.append(d)});
+const H=$('#phs');H.innerHTML='';const opt=v=>M.params.map(p=>`<option value="${p.id}" ${p.id===v?'selected':''}>${p.name}</option>`).join('');
+M.physics.forEach(r=>{const d=document.createElement('div');d.className='ph';d.innerHTML=`<div class="row"><select class="i">${opt(r.inp)}</select>→<select class="o">${opt(r.out)}</select><button>×</button></div><div class="row">硬さ<input type="number" class="k" value="${r.k}">減衰<input type="number" class="d" value="${r.d}">感度<input type="number" step="0.1" class="g" value="${r.g}"></div>`;
+d.querySelector('.i').onchange=e=>{r.inp=e.target.value;r.last=null};d.querySelector('.o').onchange=e=>r.out=e.target.value;
+['k','d','g'].forEach(c=>d.querySelector('.'+c).onchange=e=>r[c]=+e.target.value);d.querySelector('button').onclick=()=>{M.physics=M.physics.filter(q=>q!==r);ui()};H.append(d)});const E=$('#exs');E.innerHTML='';M.exps.forEach(e=>{const b=document.createElement('button');b.textContent=e.name+(e.key?` [${e.key}]`:'');b.onclick=()=>applyExp(e);b.oncontextmenu=ev=>{ev.preventDefault();M.exps=M.exps.filter(q=>q!==e);ui()};E.append(b)})}
+$('#bImg').onclick=()=>$('#fImg').click();
+$('#fImg').onchange=e=>{for(const f of e.target.files){const r=new FileReader();r.onload=()=>addLayer(f.name,r.result);r.readAsDataURL(f)}e.target.value=''};
+$('#bMove').onclick=()=>{mode='move';$('#bMove').className='on';$('#bMesh').className=''};$('#bMesh').onclick=()=>{mode='mesh';$('#bMesh').className='on';$('#bMove').className=''};
+$('#bGen').onclick=()=>{if(sel){push();genMesh(sel,+$('#cc').value,+$('#rr').value);ui()}};
+$('#lS').oninput=e=>{if(sel)sel.s=+e.target.value};
+$('#lDel').onclick=()=>{M.layers=M.layers.filter(l=>l!==sel);sel=M.layers[0]||null;ui()};
+const mv=d=>{const i=M.layers.indexOf(sel),j=i+d;if(sel&&j>=0&&j<M.layers.length){[M.layers[i],M.layers[j]]=[M.layers[j],M.layers[i]];ui()}};$('#lUp').onclick=()=>mv(-1);$('#lDn').onclick=()=>mv(1);
+$('#pAdd').onclick=()=>{const n=prompt('パラメータ名');if(!n)return;const a=+prompt('最小値','-1'),b=+prompt('最大値','1');if(!(b>a))return;M.params.push({id:'P'+idc++,name:n,min:a,max:b,def:cl(0,a,b),val:cl(0,a,b)});ui()};
+$('#yAdd').onclick=()=>{if(M.params.length>1){M.physics.push(initPh({inp:M.params[0].id,out:M.params[M.params.length-1].id,k:40,d:4,g:.3}));ui()}};
+$('#bFit').onclick=()=>view={x:0,y:0,z:1};
+async function save(name,data){const dl=await claude.use('downloads');if(!dl){alert('この環境ではファイル保存を利用できません');return}try{await dl.save({filename:name,data})}catch(e){if(e.code!=='declined')alert('保存に失敗: '+(e.code||e.message))}}
+$('#bSave').onclick=()=>{const o={format:'vtm2',params:M.params.map(({id,name,min,max,def,val})=>({id,name,min,max,def,val})),physics:M.physics.map(({inp,out,k,d,g})=>({inp,out,k,d,g})),
+layers:M.layers.map(l=>({...l,im:undefined})),exps:M.exps,anim:M.anim};save('model.vtm.json',JSON.stringify(o))};
+$('#bPng').onclick=()=>{draw(false);cv.toBlob(b=>{save('model.png',b);},'image/png')};
+$('#bLoad').onclick=()=>$('#fMod').click();
+$('#fMod').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const o=JSON.parse(await f.text());if(o.format!=='vtm2')throw 0;
+M={layers:[],params:o.params.map(p=>({...p})),physics:o.physics.map(r=>initPh({...r}))};ap=M.params[0]&&M.params[0].id;sel=null;
+const arr=[];await Promise.all(o.layers.map((L,i)=>new Promise(res=>{const im=new Image();im.onload=()=>{arr[i]={...L,im};idc=Math.max(idc,L.id+1);res()};im.src=L.src})));M.layers=arr;U=[];Rd=[];sel=M.layers[0]||null;ui()}catch(_){alert('読み込めないファイルです')}};
+const snap=()=>JSON.stringify({p:M.params.map(p=>p.val),l:M.layers.map(l=>({id:l.id,x:l.x,y:l.y,s:l.s,rot:l.rot,op:l.op,vis:l.vis,bl:l.bl,v:l.v,u:l.u,t:l.t,kf:l.kf,bind:l.bind,par:l.par,clip:l.clip,inv:l.inv}))});
+function push(){U.push(snap());if(U.length>50)U.shift();Rd=[]}
+function rest(s){const o=JSON.parse(s);o.p.forEach((v,i)=>{if(M.params[i])M.params[i].val=v});o.l.forEach(L=>{const l=byId(L.id);if(l)Object.assign(l,L)});ui()}
+function undo(){if(U.length){Rd.push(snap());rest(U.pop())}}function redo(){if(Rd.length){U.push(snap());rest(Rd.pop())}}
+function addV(x,y){const l=sel,V=cur(l),T=l.t;for(let k=0;k<T.length;k+=3){const a=T[k],b=T[k+1],c=T[k+2],A=w2(l,V[a*2],V[a*2+1]),B=w2(l,V[b*2],V[b*2+1]),C=w2(l,V[c*2],V[c*2+1]),d=(B[1]-C[1])*(A[0]-C[0])+(C[0]-B[0])*(A[1]-C[1]),
+wa=((B[1]-C[1])*(x-C[0])+(C[0]-B[0])*(y-C[1]))/d,wb=((C[1]-A[1])*(x-C[0])+(A[0]-C[0])*(y-C[1]))/d,wc=1-wa-wb;
+if(wa>=0&&wb>=0&&wc>=0){push();const n=l.v.length/2,mix=r=>[wa*r[a*2]+wb*r[b*2]+wc*r[c*2],wa*r[a*2+1]+wb*r[b*2+1]+wc*r[c*2+1]];l.v.push(...mix(l.v));l.u.push(...mix(l.u));for(const q in l.kf)for(const f of l.kf[q])f.off.push(...mix(f.off));T.splice(k,3,a,b,n,b,c,n,c,a,n);selV=n;return}}}
+function delV(){if(!sel||selV<0)return;push();const t=[];for(let i=0;i<sel.t.length;i+=3){const a=sel.t.slice(i,i+3);if(!a.includes(selV))t.push(...a)}sel.t=t;selV=-1}
+function fillSel(){const o='<option value="">なし</option>'+M.layers.filter(l=>l!==sel).map(l=>`<option value="${l.id}">${l.name}</option>`).join('');$('#lP').innerHTML=o;$('#lC').innerHTML=o;if(!sel)return;
+$('#lP').value=sel.par||'';$('#lC').value=sel.clip||'';$('#lR').value=sel.rot||0;$('#lO').value=sel.op==null?1:sel.op;$('#lB').value=sel.bl||'source-over';$('#lI').checked=!!sel.inv}
+const applyExp=e=>{for(const id in e.vals){const p=P(id);if(p)p.val=e.vals[id]}};
+const setMode=m=>{mode=m;[['bMove','move'],['bMesh','mesh'],['bAdd','add']].forEach(([i,k])=>$('#'+i).className=k===m?'on':'')};
+$('#bMove').onclick=()=>setMode('move');$('#bMesh').onclick=()=>setMode('mesh');$('#bAdd').onclick=()=>setMode('add');$('#bDelV').onclick=delV;$('#bUndo').onclick=undo;$('#bRedo').onclick=redo;
+[['lR','rot'],['lO','op']].forEach(([i,k])=>{const e=$('#'+i);e.onpointerdown=()=>push();e.oninput=()=>{if(sel)sel[k]=+e.value}});
+$('#lB').onchange=e=>{if(sel){push();sel.bl=e.target.value}};$('#lI').onchange=e=>{if(sel){push();sel.inv=e.target.checked}};
+$('#lP').onchange=e=>{if(sel){push();sel.par=+e.target.value||undefined}};$('#lC').onchange=e=>{if(sel){push();sel.clip=+e.target.value||undefined}};
+$('#lBind').onclick=()=>{if(!sel)return;const n=prompt('連動するパラメータ名(例: 角度X)'),p=M.params.find(q=>q.name===n||q.id===n);if(!p)return alert('見つかりません');const k=prompt('対象 x / y / r(回転) / s(拡大) / a(不透明度)','r');if(!k||k.length!==1||!'xyrsa'.includes(k))return;const a=+prompt('パラメータ最小時の加算量','-10'),b=+prompt('パラメータ最大時の加算量','10');push();(sel.bind=sel.bind||[]).push({p:p.id,k,a,b})};
+$('#lKey').onclick=()=>{if(sel){const k=prompt('表示/非表示を切り替えるキー(1文字、空で解除)',sel.key||'');if(k!==null)sel.key=k||undefined}};
+$('#eAdd').onclick=()=>{const n=prompt('表情名');if(!n)return;const k=prompt('ホットキー(1文字、任意)')||'',vals={};M.params.forEach(p=>vals[p.id]=p.val);M.exps.push({name:n,key:k,vals});ui()};
+$('#bRec').onclick=()=>{if(rec){M.anim={ids:M.params.map(p=>p.id),fr:rec.fr};rec=null;$('#bRec').textContent='●録画'}else{play=null;$('#bPlay').textContent='▶再生';rec={t0:T,fr:[]};$('#bRec').textContent='■停止'}};
+$('#bPlay').onclick=()=>{if(play){play=null;$('#bPlay').textContent='▶再生'}else if(M.anim&&M.anim.fr.length){play=T;$('#bPlay').textContent='■停止'}};
+addEventListener('keydown',e=>{const t=e.target;if(/INPUT|SELECT|TEXTAREA/.test(t.tagName)&&t.type!=='checkbox'&&t.type!=='radio')return;const m=e.ctrlKey||e.metaKey;
+if(m&&e.key==='z'){e.preventDefault();e.shiftKey?redo():undo();return}if(m&&e.key==='y'){redo();return}if(e.key==='Delete'||e.key==='Backspace'){delV();return}
+M.exps.forEach(x=>x.key&&x.key===e.key&&applyExp(x));M.layers.forEach(l=>{if(l.key&&l.key===e.key){l.vis=!l.vis;ui()}})});
+defaults();ui();
+</script></body></html>
